@@ -1,0 +1,29 @@
+[package]
+name = "airpods-battery-watch"
+version = "0.1.0"
+edition = "2021"
+authors = ["C130AIR"]
+description = "WinIsland plugin: show AirPods battery on the island and alert when low"
+repository = "https://github.com/C130AIR/airpods-battery-watch"
+license = "MIT"
+
+[lib]
+name = "airpods_battery_watch"
+crate-type = ["cdylib"]
+
+[dependencies]
+winisland-plugin-api = "0.5"
+windows = { version = "0.56", features = [
+    "Devices_Bluetooth",
+    "Devices_Bluetooth_Advertisement",
+    "Foundation",
+    "Foundation_Collections",
+    "Storage_Streams",
+] }
+
+[dev-dependencies]
+winisland-plugin-api = { version = "0.5", features = ["packager"] }
+
+[[example]]
+name = "pack"
+path = "package.rs"
