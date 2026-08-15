@@ -11,13 +11,13 @@ use std::ffi::c_void;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-use winisland_plugin_api::*;
 use windows::Devices::Bluetooth::Advertisement::{
     BluetoothLEAdvertisementReceivedEventArgs, BluetoothLEAdvertisementWatcher,
     BluetoothLEScanningMode,
 };
 use windows::Foundation::TypedEventHandler;
 use windows::Storage::Streams::DataReader;
+use winisland_plugin_api::*;
 
 // ---------------------------------------------------------------------------
 // AirPods 协议常量（AppleCP）
@@ -209,57 +209,57 @@ fn update_context(shared: &Shared, state: &BatteryState) {
 
 fn on_received(
     shared: Arc<Shared>,
-) -> TypedEventHandler<BluetoothLEAdvertisementWatcher, BluetoothLEAdvertisementReceivedEventArgs>
-{
+) -> TypedEventHandler<BluetoothLEAdvertisementWatcher, BluetoothLEAdvertisementReceivedEventArgs> {
     TypedEventHandler::new(
         move |_: &Option<BluetoothLEAdvertisementWatcher>,
               args: &Option<BluetoothLEAdvertisementReceivedEventArgs>| {
-        let Some(args) = args else {
-            return Ok(());
-        };
-        let adv = match args.Advertisement() {
-            Ok(a) => a,
-            Err(_) => return Ok(()),
-        };
-        let mfr = match adv.ManufacturerData() {
-            Ok(m) => m,
-            Err(_) => return Ok(()),
-        };
+            let Some(args) = args else {
+                return Ok(());
+            };
+            let adv = match args.Advertisement() {
+                Ok(a) => a,
+                Err(_) => return Ok(()),
+            };
+            let mfr = match adv.ManufacturerData() {
+                Ok(m) => m,
+                Err(_) => return Ok(()),
+            };
 
-        let size = match mfr.Size() {
-            Ok(s) => s,
-            Err(_) => return Ok(()),
-        };
-        for i in 0..size {
-            let item = match mfr.GetAt(i) {
-                Ok(it) => it,
-                Err(_) => continue,
+            let size = match mfr.Size() {
+                Ok(s) => s,
+                Err(_) => return Ok(()),
             };
-            let company = match item.CompanyId() {
-                Ok(c) => c,
-                Err(_) => continue,
-            };
-            if company != APPLE_VENDOR_ID {
-                continue;
+            for i in 0..size {
+                let item = match mfr.GetAt(i) {
+                    Ok(it) => it,
+                    Err(_) => continue,
+                };
+                let company = match item.CompanyId() {
+                    Ok(c) => c,
+                    Err(_) => continue,
+                };
+                if company != APPLE_VENDOR_ID {
+                    continue;
+                }
+                let buf = match item.Data() {
+                    Ok(b) => b,
+                    Err(_) => continue,
+                };
+                let reader = match DataReader::FromBuffer(&buf) {
+                    Ok(r) => r,
+                    Err(_) => continue,
+                };
+                let mut bytes = [0u8; AIRPODS_PACKET_SIZE];
+                if reader.ReadBytes(&mut bytes).is_err() {
+                    continue;
+                }
+                if let Some(state) = parse_airpods(&bytes) {
+                    update_context(&shared, &state);
+                }
             }
-            let buf = match item.Data() {
-                Ok(b) => b,
-                Err(_) => continue,
-            };
-            let reader = match DataReader::FromBuffer(&buf) {
-                Ok(r) => r,
-                Err(_) => continue,
-            };
-            let mut bytes = [0u8; AIRPODS_PACKET_SIZE];
-            if reader.ReadBytes(&mut bytes).is_err() {
-                continue;
-            }
-            if let Some(state) = parse_airpods(&bytes) {
-                update_context(&shared, &state);
-            }
-        }
-        Ok(())
-    })
+            Ok(())
+        },
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -310,7 +310,10 @@ unsafe extern "C" fn create(
         Ok(w) => w,
         Err(_) => return PluginResultC::err("failed to create BLE watcher"),
     };
-    if watcher.SetScanningMode(BluetoothLEScanningMode::Active).is_err() {
+    if watcher
+        .SetScanningMode(BluetoothLEScanningMode::Active)
+        .is_err()
+    {
         return PluginResultC::err("failed to set scanning mode");
     }
     let handler = on_received(shared.clone());
@@ -348,7 +351,10 @@ unsafe extern "C" fn shutdown(handle: PluginHandle) -> PluginResultC {
             // SAFETY: 该资源属于同一 plugin token。
             let _ = unsafe { release(instance.shared.token, id) };
         }
-        instance.shared.context_id.store(INVALID_ID, Ordering::Relaxed);
+        instance
+            .shared
+            .context_id
+            .store(INVALID_ID, Ordering::Relaxed);
     }
     PluginResultC::ok()
 }
